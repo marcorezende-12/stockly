@@ -72,48 +72,61 @@ const UpsertSheetContent = ({
     },
   });
 
+  // ✅ onSubmit corrigido (NÃO adiciona produto fora de estoque)
   const onSubmit = (data: FormSchema) => {
     const selectedProduct = products.find(
       (product) => product.id === data.productId,
     );
     if (!selectedProduct) return;
-    setSelectedProducts((currentProducts) => {
-      const existingProduct = currentProducts.find(
-        (product) => product.id === selectedProduct.id,
-      );
+
+    const existingProduct = selectedProducts.find(
+      (product) => product.id === selectedProduct.id,
+    );
+
+    // quantidade total desejada
+    const totalRequested =
+      (existingProduct?.quantity ?? 0) + Number(data.quantity);
+
+    // ❌ impede adicionar ou somar se passar do estoque
+    if (totalRequested > selectedProduct.stock) {
+      form.setError("quantity", {
+        message: "Quantidade indisponível em estoque",
+      });
+      return;
+    }
+
+    // atualizar lista
+    setSelectedProducts((current) => {
       if (existingProduct) {
-        return currentProducts.map((product) => {
-          if (product.id === selectedProduct.id) {
-            return {
-              ...product,
-              quantity: product.quantity + data.quantity,
-            };
-          }
-          return product;
-        });
+        return current.map((p) =>
+          p.id === selectedProduct.id
+            ? { ...p, quantity: p.quantity + data.quantity }
+            : p,
+        );
       }
+
       return [
-        ...currentProducts,
+        ...current,
         {
-          ...selectedProduct,
+          id: selectedProduct.id,
+          name: selectedProduct.name,
           price: Number(selectedProduct.price),
           quantity: data.quantity,
         },
       ];
     });
+
     form.reset();
   };
 
   const productsTotal = useMemo(() => {
-    return selectedProducts.reduce((acc, product) => {
-      return acc + product.price * product.quantity;
-    }, 0);
+    return selectedProducts.reduce((acc, p) => acc + p.price * p.quantity, 0);
   }, [selectedProducts]);
 
   const onDelete = (productId: string) => {
-    setSelectedProducts((currentProducts) => {
-      return currentProducts.filter((product) => product.id != productId);
-    });
+    setSelectedProducts((current) =>
+      current.filter((product) => product.id != productId),
+    );
   };
 
   return (
@@ -167,6 +180,7 @@ const UpsertSheetContent = ({
               </FormItem>
             )}
           />
+
           <Button type="submit" className="w-full gap-2" variant="secondary">
             <PlusIcon size={16} />
             Adicionar produto à venda
