@@ -3,6 +3,7 @@
 import {
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/app/_components/ui/sheet";
@@ -20,8 +21,8 @@ import {
 import { Input } from "@/app/_components/ui/input";
 import { Combobox, ComboboxOption } from "@/app/_components/ui/combobox";
 import { Button } from "@/app/_components/ui/button";
-import { PlusIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CheckIcon, PlusIcon } from "lucide-react";
+import { Dispatch, SetStateAction, useMemo, useState } from "react";
 import { Product } from "@prisma/client";
 import {
   Table,
@@ -35,6 +36,8 @@ import {
 } from "@/app/_components/ui/table";
 import { formatCurrency } from "@/app/_helpers/currency";
 import SalesTableDropdownMenu from "./table-dropdown-menu";
+import { createSale } from "@/app/_actions/sale/create-sale";
+import { toast } from "sonner";
 
 const formSchema = z.object({
   productId: z.string().uuid({
@@ -55,11 +58,13 @@ type FormSchema = z.infer<typeof formSchema>;
 interface UpsertSheetContentProps {
   products: Product[];
   productOptions: ComboboxOption[];
+  setSheetIsOpen: Dispatch<SetStateAction<boolean>>;
 }
 
 const UpsertSheetContent = ({
   products,
   productOptions,
+  setSheetIsOpen,
 }: UpsertSheetContentProps) => {
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(
     [],
@@ -72,7 +77,6 @@ const UpsertSheetContent = ({
     },
   });
 
-  // ✅ onSubmit corrigido (NÃO adiciona produto fora de estoque)
   const onSubmit = (data: FormSchema) => {
     const selectedProduct = products.find(
       (product) => product.id === data.productId,
@@ -87,7 +91,6 @@ const UpsertSheetContent = ({
     const totalRequested =
       (existingProduct?.quantity ?? 0) + Number(data.quantity);
 
-    // ❌ impede adicionar ou somar se passar do estoque
     if (totalRequested > selectedProduct.stock) {
       form.setError("quantity", {
         message: "Quantidade indisponível em estoque",
@@ -127,6 +130,21 @@ const UpsertSheetContent = ({
     setSelectedProducts((current) =>
       current.filter((product) => product.id != productId),
     );
+  };
+
+  const onSubmitSale = async () => {
+    try {
+      await createSale({
+        products: selectedProducts.map((product) => ({
+          id: product.id,
+          quantity: product.quantity,
+        })),
+      });
+      toast.success("Venda realizada com sucesso");
+      setSheetIsOpen(false);
+    } catch (error) {
+      toast.error("Erro ao realizar venda");
+    }
   };
 
   return (
@@ -222,6 +240,17 @@ const UpsertSheetContent = ({
           </TableRow>
         </TableFooter>
       </Table>
+
+      <SheetFooter className="pt-6">
+        <Button
+          className="w-full gap-2"
+          disabled={selectedProducts.length === 0}
+          onClick={onSubmitSale}
+        >
+          <CheckIcon size={20} />
+          Finalizar venda
+        </Button>
+      </SheetFooter>
     </SheetContent>
   );
 };
